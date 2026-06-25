@@ -1,0 +1,62 @@
+name: Release
+
+# Builds an ad-hoc-signed PeakBar DMG and publishes it to a GitHub Release when a
+# version tag is pushed. This is the FREE path — no Apple Developer account, no
+# secrets required. The DMG is not notarized, so users perform a one-time
+# Gatekeeper bypass on first launch (the install steps are added to the release
+# notes below, and live in the README).
+#
+# To upgrade to a notarized, warning-free release later (requires a paid Apple
+# Developer Program membership), see scripts/build-dmg.sh's `developer-id` mode
+# and scripts/notarize.sh, and add the signing secrets described there.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write   # needed to create the GitHub Release
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Install create-dmg
+        run: brew install create-dmg
+
+      - name: Build ad-hoc DMG
+        run: ./scripts/build-dmg.sh adhoc
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/PeakBar.dmg
+          generate_release_notes: true
+          body: |
+            ## Install
+
+            PeakBar is a free, open-source app that is **not notarized by Apple**,
+            so macOS Gatekeeper blocks it on first launch. This is expected — do
+            the one-time unblock below.
+
+            1. Download `PeakBar.dmg`, open it, and drag **PeakBar** to **Applications**.
+            2. Try to open PeakBar once (it will be blocked).
+            3. Open **System Settings → Privacy & Security**, scroll to the bottom,
+               and click **Open Anyway** next to the PeakBar message. Confirm.
+
+            Prefer the terminal? Run this once after copying to Applications, then open normally:
+
+            ```
+            xattr -dr com.apple.quarantine /Applications/PeakBar.app
+            ```
+
+            Requires macOS 13 (Ventura) or later, Apple Silicon or Intel.
