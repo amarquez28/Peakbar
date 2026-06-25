@@ -1,0 +1,15 @@
+# macOS
+.DS_Store
+
+# Xcode — user-specific state (keep xcshareddata, which holds the shared scheme)
+xcuserdata/
+*.xcuserstate
+
+# Build output
+build/
+DerivedData/
+*.xcarchive
+*.dmg
+
+# Swift Package Manager
+.build/
