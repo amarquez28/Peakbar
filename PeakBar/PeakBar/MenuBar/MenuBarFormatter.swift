@@ -29,4 +29,24 @@ enum MenuBarFormatter {
         }
         return parts.isEmpty ? "PeakBar" : parts.joined(separator: " ")
     }
+
+    /// Short value string (no word label) for compact mode, paired with the
+    /// stat's SF Symbol in the menu bar.
+    static func compactValue(for stat: StatType, stats: StatsSnapshot) -> String {
+        switch stat {
+        case .cpu:
+            return "\(Int(stats.cpuUsage.rounded()))%"
+        case .gpu:
+            return "\(Int(stats.gpuUsage.rounded()))%"
+        case .ram:
+            return String(format: "%.1fG", stats.ramUsage)
+        case .cpuTemp:
+            return stats.cpuTemp.map { "\(Int($0.rounded()))°" } ?? "--°"
+        case .gpuTemp:
+            return stats.gpuTemp.map { "\(Int($0.rounded()))°" } ?? "--°"
+        case .fan:
+            guard let rpm = stats.fanSpeed else { return "--" }
+            return rpm < 1 ? "off" : "\(Int(rpm.rounded()))"
+        }
+    }
 }

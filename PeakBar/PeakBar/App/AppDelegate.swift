@@ -15,5 +15,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusBarController = StatusBarController(statsManager: statsManager, settings: settings)
         statsManager.start()
+        UpdateChecker.shared.checkInBackgroundIfDue()
     }
 }

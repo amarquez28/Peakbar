@@ -39,4 +39,28 @@ enum StatType: String, CaseIterable, Identifiable, Codable {
         case .fan: return "FAN"
         }
     }
+
+    /// SF Symbol used in compact menu bar mode. All available on macOS 13+.
+    /// (GPU has no stock SF Symbol, so it uses `compactImageName` instead — this
+    /// value is the fallback if the custom image can't be loaded.)
+    var symbolName: String {
+        switch self {
+        case .cpu: return "cpu"
+        case .gpu: return "display"
+        case .ram: return "memorychip"
+        case .cpuTemp: return "thermometer"
+        case .gpuTemp: return "flame"
+        case .fan: return "fanblades"
+        }
+    }
+
+    /// Asset-catalog name of a custom template image to use in compact mode in
+    /// preference to `symbolName`. GPU uses a hand-drawn two-fan graphics card
+    /// since SF Symbols has no GPU glyph.
+    var compactImageName: String? {
+        switch self {
+        case .gpu: return "GPUIcon"
+        default: return nil
+        }
+    }
 }

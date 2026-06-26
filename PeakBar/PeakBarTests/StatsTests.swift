@@ -55,4 +55,30 @@ final class StatsTests: XCTestCase {
         let text = MenuBarFormatter.format(visibleStats: [], stats: StatsSnapshot())
         XCTAssertEqual(text, "PeakBar")
     }
+
+    func testCompactValues() {
+        var snap = StatsSnapshot()
+        snap.cpuUsage = 10.4
+        snap.ramUsage = 7.23
+        snap.cpuTemp = nil
+        snap.fanSpeed = 0
+        XCTAssertEqual(MenuBarFormatter.compactValue(for: .cpu, stats: snap), "10%")
+        XCTAssertEqual(MenuBarFormatter.compactValue(for: .ram, stats: snap), "7.2G")
+        XCTAssertEqual(MenuBarFormatter.compactValue(for: .cpuTemp, stats: snap), "--°")
+        XCTAssertEqual(MenuBarFormatter.compactValue(for: .fan, stats: snap), "off")
+
+        snap.fanSpeed = 2317.6
+        XCTAssertEqual(MenuBarFormatter.compactValue(for: .fan, stats: snap), "2318")
+    }
+
+    @MainActor
+    func testVersionComparison() {
+        XCTAssertTrue(UpdateChecker.isNewer("1.0.1", than: "1.0.0"))
+        XCTAssertTrue(UpdateChecker.isNewer("v1.2.0", than: "1.1.9"))
+        XCTAssertTrue(UpdateChecker.isNewer("2.0", than: "1.9.9"))
+        XCTAssertFalse(UpdateChecker.isNewer("1.0.0", than: "1.0.0"))
+        XCTAssertFalse(UpdateChecker.isNewer("1.0", than: "1.0.1"))
+        // Numeric (not lexical) comparison: 1.10 > 1.9
+        XCTAssertTrue(UpdateChecker.isNewer("1.10.0", than: "1.9.0"))
+    }
 }

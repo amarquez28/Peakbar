@@ -1,0 +1,16 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2DD4BF"/>
+      <stop offset="1" stop-color="#0F766E"/>
+    </linearGradient>
+  </defs>
+  <!-- macOS squircle: 824x824 centered in 1024 with ~100px margin -->
+  <rect x="100" y="100" width="824" height="824" rx="185" ry="185" fill="url(#bg)"/>
+  <!-- back peak -->
+  <polygon points="540,720 690,430 850,720" fill="#ffffff" opacity="0.45"/>
+  <!-- front peak -->
+  <polygon points="180,720 440,320 700,720" fill="#ffffff"/>
+  <!-- snow line notch on the front peak -->
+  <polygon points="440,320 392,392 422,374 440,396 458,374 488,392" fill="#0F766E" opacity="0.9"/>
+</svg>

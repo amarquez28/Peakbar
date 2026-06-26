@@ -19,6 +19,7 @@ final class SettingsStore: ObservableObject {
     private let defaults = UserDefaults.standard
     private let visibleStatsKey = "visibleStats"
     private let launchAtLoginKey = "launchAtLogin"
+    private let compactModeKey = "compactMode"
 
     @Published var visibleStats: [StatType] {
         didSet { defaults.set(visibleStats.map(\.rawValue), forKey: visibleStatsKey) }
@@ -31,6 +32,12 @@ final class SettingsStore: ObservableObject {
         }
     }
 
+    /// When on, the menu bar uses compact SF Symbol icons + values instead of
+    /// word labels, to save horizontal space (e.g. on notched displays).
+    @Published var compactMode: Bool {
+        didSet { defaults.set(compactMode, forKey: compactModeKey) }
+    }
+
     private init() {
         if let raw = defaults.array(forKey: visibleStatsKey) as? [String] {
             let parsed = raw.compactMap(StatType.init(rawValue:))
@@ -39,6 +46,7 @@ final class SettingsStore: ObservableObject {
             visibleStats = [.cpu, .gpu] // defaults
         }
         launchAtLogin = defaults.bool(forKey: launchAtLoginKey)
+        compactMode = defaults.bool(forKey: compactModeKey)
     }
 
     func isVisible(_ stat: StatType) -> Bool {
