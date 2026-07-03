@@ -82,6 +82,7 @@ PeakBar/
   - CPU Temp
   - GPU Temp
   - Fan Speed (RPM)
+  - Power Draw (W)
 - Each block shows:
   - Stat name
   - Current live value
@@ -173,6 +174,14 @@ no `F*Ac` key at all → `nil` → `--` (fanless Macs like the MacBook Air).
 
 > Verified on M3 Pro: `FNum = 2` fans; `F0Mn/F1Mn` ≈ 2317 RPM min, `F0Mx/F1Mx` ≈
 > 6800 RPM max; idle `F0Ac/F1Ac` = 0 (fans off).
+
+### Power Draw (SMC)
+`PowerMonitor` reads total system power in watts from `PSTR` ("System Total
+Power", `flt`), falling back to `PDTR` ("DC In" — reads higher while the battery
+is charging). Missing keys or implausible values (≤0 or ≥1000 W) → `nil` → `--`.
+Menu bar format: `PWR 32.7W` (normal), bolt SF Symbol + `33W` (compact).
+
+> Verified on M3 Pro: `PSTR` ≈ 33 W light load; `PDTR` ≈ 67 W while charging.
 
 > ⚠️ **Fan control is intentionally NOT implemented.** Writing fan keys
 > (`F<n>Md` mode / `F<n>Tg` target) requires a root-privileged helper daemon,

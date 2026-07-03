@@ -17,6 +17,7 @@ struct StatsSnapshot {
     var cpuTemp: Double? = nil    // degrees Celsius
     var gpuTemp: Double? = nil    // degrees Celsius
     var fanSpeed: Double? = nil   // RPM (averaged across fans)
+    var powerWatts: Double? = nil // total system power draw (W)
 }
 
 final class StatsManager: ObservableObject {
@@ -30,6 +31,7 @@ final class StatsManager: ObservableObject {
     private let ram = RAMMonitor()
     private let thermal = ThermalMonitor()
     private let fan = FanMonitor()
+    private let power = PowerMonitor()
 
     private let interval: TimeInterval = 5
     private var timerCancellable: AnyCancellable?
@@ -56,6 +58,7 @@ final class StatsManager: ObservableObject {
         snap.cpuTemp = temps.cpu
         snap.gpuTemp = temps.gpu
         snap.fanSpeed = fan.sample()
+        snap.powerWatts = power.sample()
 
         snapshot = snap
         onUpdate?(snap)
@@ -72,6 +75,8 @@ final class StatsManager: ObservableObject {
         case .fan:
             guard let rpm = snapshot.fanSpeed else { return "--" }
             return rpm < 1 ? "Off" : "\(Int(rpm.rounded())) rpm"
+        case .power:
+            return snapshot.powerWatts.map { String(format: "%.1f W", $0) } ?? "-- W"
         }
     }
 }

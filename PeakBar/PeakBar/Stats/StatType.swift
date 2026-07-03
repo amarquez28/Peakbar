@@ -15,6 +15,7 @@ enum StatType: String, CaseIterable, Identifiable, Codable {
     case cpuTemp
     case gpuTemp
     case fan
+    case power
 
     var id: String { rawValue }
 
@@ -27,6 +28,7 @@ enum StatType: String, CaseIterable, Identifiable, Codable {
         case .cpuTemp: return "CPU Temp"
         case .gpuTemp: return "GPU Temp"
         case .fan: return "Fan Speed"
+        case .power: return "Power Draw"
         }
     }
 
@@ -37,6 +39,7 @@ enum StatType: String, CaseIterable, Identifiable, Codable {
         case .gpu, .gpuTemp: return "GPU"
         case .ram: return "RAM"
         case .fan: return "FAN"
+        case .power: return "PWR"
         }
     }
 
@@ -51,6 +54,7 @@ enum StatType: String, CaseIterable, Identifiable, Codable {
         case .cpuTemp: return "thermometer"
         case .gpuTemp: return "flame"
         case .fan: return "fanblades"
+        case .power: return "bolt.fill"
         }
     }
 

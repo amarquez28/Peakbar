@@ -51,6 +51,15 @@ final class StatsTests: XCTestCase {
         XCTAssertEqual(MenuBarFormatter.format(visibleStats: [.fan], stats: snap), "FAN --")
     }
 
+    func testMenuBarPowerFormatting() {
+        var snap = StatsSnapshot()
+        snap.powerWatts = 32.68
+        XCTAssertEqual(MenuBarFormatter.format(visibleStats: [.power], stats: snap), "PWR 32.7W")
+
+        snap.powerWatts = nil       // SMC key unavailable
+        XCTAssertEqual(MenuBarFormatter.format(visibleStats: [.power], stats: snap), "PWR --W")
+    }
+
     func testEmptySelectionShowsAppName() {
         let text = MenuBarFormatter.format(visibleStats: [], stats: StatsSnapshot())
         XCTAssertEqual(text, "PeakBar")
@@ -69,6 +78,11 @@ final class StatsTests: XCTestCase {
 
         snap.fanSpeed = 2317.6
         XCTAssertEqual(MenuBarFormatter.compactValue(for: .fan, stats: snap), "2318")
+
+        snap.powerWatts = 32.68
+        XCTAssertEqual(MenuBarFormatter.compactValue(for: .power, stats: snap), "33W")
+        snap.powerWatts = nil
+        XCTAssertEqual(MenuBarFormatter.compactValue(for: .power, stats: snap), "--W")
     }
 
     @MainActor

@@ -25,6 +25,8 @@ enum MenuBarFormatter {
             case .fan:
                 guard let rpm = stats.fanSpeed else { return "FAN --" }
                 return rpm < 1 ? "FAN Off" : "FAN \(Int(rpm.rounded()))rpm"
+            case .power:
+                return "PWR " + (stats.powerWatts.map { String(format: "%.1fW", $0) } ?? "--W")
             }
         }
         return parts.isEmpty ? "PeakBar" : parts.joined(separator: " ")
@@ -47,6 +49,8 @@ enum MenuBarFormatter {
         case .fan:
             guard let rpm = stats.fanSpeed else { return "--" }
             return rpm < 1 ? "off" : "\(Int(rpm.rounded()))"
+        case .power:
+            return stats.powerWatts.map { "\(Int($0.rounded()))W" } ?? "--W"
         }
     }
 }
