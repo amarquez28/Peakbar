@@ -44,8 +44,8 @@ enum StatType: String, CaseIterable, Identifiable, Codable {
     }
 
     /// SF Symbol used in compact menu bar mode. All available on macOS 13+.
-    /// (GPU has no stock SF Symbol, so it uses `compactImageName` instead — this
-    /// value is the fallback if the custom image can't be loaded.)
+    /// (GPU has no stock SF Symbol, so it uses `customSymbolName` instead — this
+    /// value is the fallback if the custom symbol can't be loaded.)
     var symbolName: String {
         switch self {
         case .cpu: return "cpu"
@@ -58,10 +58,11 @@ enum StatType: String, CaseIterable, Identifiable, Codable {
         }
     }
 
-    /// Asset-catalog name of a custom template image to use in compact mode in
-    /// preference to `symbolName`. GPU uses a hand-drawn two-fan graphics card
-    /// since SF Symbols has no GPU glyph.
-    var compactImageName: String? {
+    /// Asset-catalog name of a custom SF Symbol (`.symbolset`) to use in compact
+    /// mode in preference to `symbolName`. GPU uses a hand-drawn two-fan graphics
+    /// card since SF Symbols has no GPU glyph. Being a real symbol (not a plain
+    /// template image), it gets the same menu bar tinting/dimming as stock symbols.
+    var customSymbolName: String? {
         switch self {
         case .gpu: return "GPUIcon"
         default: return nil

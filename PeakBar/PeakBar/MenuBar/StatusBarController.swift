@@ -91,7 +91,7 @@ final class StatusBarController {
             }
 
             if let icon = symbolImage(for: stat, config: symbolConfig) {
-                let displaySize = iconDisplaySize(icon, isCustom: stat.compactImageName != nil, config: symbolConfig)
+                let displaySize = icon.size
                 let attachment = NSTextAttachment()
                 attachment.image = icon
                 attachment.bounds = CGRect(
@@ -117,52 +117,20 @@ final class StatusBarController {
         return result
     }
 
-    /// Returns the compact-mode icon for a stat: a custom template image
-    /// (`compactImageName`) if one exists, otherwise the SF Symbol. Custom images
-    /// are scaled to match the SF Symbol height so the row stays visually even.
+    /// Returns the compact-mode icon for a stat: a custom SF Symbol from the
+    /// asset catalog (`customSymbolName`) if one exists, otherwise the stock
+    /// SF Symbol. Both are real symbol images, so the menu bar tints and dims
+    /// them identically (light/dark menu bars, inactive-screen dimming).
     private func symbolImage(for stat: StatType, config: NSImage.SymbolConfiguration) -> NSImage? {
-        // Custom glyph: plain template NSImages are NOT auto-tinted in a status
-        // item's attributed title (only SF Symbols are), so we explicitly paint
-        // the silhouette in the menu bar's text color. The drawing handler keeps
-        // it crisp at any scale, and the tint is recomputed on every refresh so
-        // it follows light/dark menu bar changes.
-        if let name = stat.compactImageName, let source = NSImage(named: name) {
-            let tint = menuBarTextColor()
-            let image = NSImage(size: source.size, flipped: false) { rect in
-                source.draw(in: rect)
-                tint.set()
-                rect.fill(using: .sourceAtop)
-                return true
-            }
-            image.isTemplate = false
-            return image
+        let base: NSImage?
+        if let name = stat.customSymbolName, let custom = NSImage(named: name) {
+            base = custom
+        } else {
+            base = NSImage(systemSymbolName: stat.symbolName, accessibilityDescription: stat.displayName)
         }
-        let symbol = NSImage(systemSymbolName: stat.symbolName, accessibilityDescription: stat.displayName)?
-            .withSymbolConfiguration(config)
+        let symbol = base?.withSymbolConfiguration(config) ?? base
         symbol?.isTemplate = true
         return symbol
-    }
-
-    /// The menu bar's text color (white on a dark menu bar, black on a light
-    /// one), resolved against the status item's current appearance.
-    private func menuBarTextColor() -> NSColor {
-        let appearance = statusItem.button?.effectiveAppearance ?? NSApp.effectiveAppearance
-        var color = NSColor.labelColor
-        appearance.performAsCurrentDrawingAppearance {
-            color = NSColor.labelColor.usingColorSpace(.sRGB) ?? .labelColor
-        }
-        return color
-    }
-
-    /// Display size for a compact-mode icon attachment. SF Symbols use their
-    /// configured size; the custom GPU glyph is matched to the SF Symbol height,
-    /// preserving its aspect ratio.
-    private func iconDisplaySize(_ icon: NSImage, isCustom: Bool, config: NSImage.SymbolConfiguration) -> NSSize {
-        guard isCustom else { return icon.size }
-        let targetHeight = NSImage(systemSymbolName: "cpu", accessibilityDescription: nil)?
-            .withSymbolConfiguration(config)?.size.height ?? menuFont.pointSize
-        let aspect = icon.size.width / max(icon.size.height, 1)
-        return NSSize(width: (targetHeight * aspect).rounded(), height: targetHeight.rounded())
     }
 
     @objc private func togglePopover(_ sender: Any?) {

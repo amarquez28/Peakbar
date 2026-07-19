@@ -14,7 +14,6 @@ DESIGN="${REPO_ROOT}/design"
 ASSETS="${REPO_ROOT}/PeakBar/PeakBar/Assets.xcassets"
 APPICON="${ASSETS}/AppIcon.appiconset"
 MENUICON="${ASSETS}/MenuBarIcon.imageset"
-GPUICON="${ASSETS}/GPUIcon.imageset"
 
 if ! command -v rsvg-convert >/dev/null 2>&1; then
   echo "error: rsvg-convert not found. Install with: brew install librsvg" >&2
@@ -62,21 +61,10 @@ cat > "${MENUICON}/Contents.json" <<'JSON'
 }
 JSON
 
-# --- Custom GPU glyph for compact mode: vector PDF template -----------------
-mkdir -p "${GPUICON}"
-rsvg-convert -f pdf "${DESIGN}/GPUIcon.svg" -o "${GPUICON}/GPUIcon.pdf"
+# --- Custom GPU glyph for compact mode: custom SF Symbol ---------------------
+# Emitted as a .symbolset (not a template imageset) so the menu bar tints and
+# dims it exactly like the stock SF Symbols. The generator mirrors the geometry
+# of design/GPUIcon.svg — see the constants at the top of the script.
+python3 "${SCRIPT_DIR}/generate-gpu-symbol.py"
 
-cat > "${GPUICON}/Contents.json" <<'JSON'
-{
-  "images" : [
-    { "idiom" : "universal", "filename" : "GPUIcon.pdf" }
-  ],
-  "info" : { "author" : "xcode", "version" : 1 },
-  "properties" : {
-    "preserves-vector-representation" : true,
-    "template-rendering-intent" : "template"
-  }
-}
-JSON
-
-echo "Generated app icon ($(ls "${APPICON}"/*.png | wc -l | tr -d ' ') PNGs), menu bar glyph, and GPU glyph."
+echo "Generated app icon ($(ls "${APPICON}"/*.png | wc -l | tr -d ' ') PNGs), menu bar glyph, and GPU symbol."
