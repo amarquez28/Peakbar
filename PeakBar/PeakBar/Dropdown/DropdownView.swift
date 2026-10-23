@@ -12,6 +12,7 @@ struct DropdownView: View {
     @ObservedObject var statsManager: StatsManager
     @ObservedObject var settings: SettingsStore
     @ObservedObject private var updateChecker = UpdateChecker.shared
+    @ObservedObject private var layout = MenuBarLayoutState.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -22,10 +23,26 @@ struct DropdownView: View {
 
             Divider()
 
-            Toggle("Compact menu bar", isOn: $settings.compactMode)
+            Picker("Menu bar style", selection: $settings.menuBarStyle) {
+                ForEach(MenuBarStyle.allCases) { style in
+                    Text(style.displayName).tag(style)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+
+            Toggle("Fit to menu bar space", isOn: $settings.fitToMenuBar)
                 .toggleStyle(.switch)
+                .help("Keeps PeakBar narrow enough for the smallest connected display so macOS doesn't hide menu bar icons. Turn off to always show every selected stat.")
             Toggle("Launch at Login", isOn: $settings.launchAtLogin)
                 .toggleStyle(.switch)
+
+            if !fitNotice.isEmpty {
+                Label(fitNotice, systemImage: "arrow.left.and.right.square")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             Divider()
 
@@ -40,6 +57,21 @@ struct DropdownView: View {
         }
         .padding(16)
         .frame(width: 320)
+    }
+
+    /// Explains the gap when the menu bar is showing less than was ticked above.
+    private var fitNotice: String {
+        let plan = layout.plan
+        var reasons: [String] = []
+        if !plan.dropped.isEmpty {
+            let names = plan.dropped.map(\.displayName).joined(separator: ", ")
+            reasons.append("\(names) hidden")
+        }
+        if let forced = plan.forcedStyle {
+            reasons.append("switched to \(forced.displayName.lowercased())")
+        }
+        guard !reasons.isEmpty else { return "" }
+        return "Not enough menu bar room: " + reasons.joined(separator: ", ") + "."
     }
 
     @ViewBuilder

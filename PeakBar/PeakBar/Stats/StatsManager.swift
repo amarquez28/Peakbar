@@ -10,16 +10,6 @@
 import Foundation
 import Combine
 
-struct StatsSnapshot {
-    var cpuUsage: Double = 0      // percent
-    var gpuUsage: Double = 0      // percent
-    var ramUsage: Double = 0      // gigabytes
-    var cpuTemp: Double? = nil    // degrees Celsius
-    var gpuTemp: Double? = nil    // degrees Celsius
-    var fanSpeed: Double? = nil   // RPM (averaged across fans)
-    var powerWatts: Double? = nil // total system power draw (W)
-}
-
 final class StatsManager: ObservableObject {
     @Published private(set) var snapshot = StatsSnapshot()
 

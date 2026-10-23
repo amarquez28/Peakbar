@@ -2,11 +2,17 @@
 //  StatusBarController.swift
 //  PeakBar
 //
-//  Owns the NSStatusItem and the dropdown NSPopover. Renders the menu bar
-//  content in one of three forms depending on settings:
-//    - no stats selected      → the Summit template glyph (no text)
-//    - normal mode            → "CPU 10% GPU 4% ..." monospaced text
-//    - compact mode           → SF Symbol + value per stat (saves width)
+//  Owns the NSStatusItem and the dropdown NSPopover, and drives MenuBarRenderer:
+//    - no stats selected → the Summit template glyph
+//    - .labels / .icons  → an attributed title on the button
+//    - .stacked          → a template image drawn by the renderer
+//
+//  The item's width is pinned (`statusItem.length`) to the widest content the
+//  current selection can ever produce, and only recalculated when the selection,
+//  the style, or the attached displays change — never on a stats refresh. A
+//  status item that resizes every few seconds makes macOS re-lay out the whole
+//  menu bar, which is what causes icons (ours, or a neighbour like Hidden Bar's
+//  arrow) to vanish on narrow displays. See MenuBarLayout.
 //
 
 import AppKit
@@ -14,13 +20,19 @@ import Combine
 import SwiftUI
 
 final class StatusBarController {
+    /// Slack added to the measured content width so the fixed-length item
+    /// doesn't clip itself — NSStatusBarButton insets its content slightly.
+    private static let buttonPadding: CGFloat = 12
+
     private let statusItem: NSStatusItem
     private let popover = NSPopover()
     private let statsManager: StatsManager
     private let settings: SettingsStore
+    private let renderer: MenuBarRenderer
+    private let layoutState = MenuBarLayoutState.shared
     private var cancellables = Set<AnyCancellable>()
+    private var plan = MenuBarLayout.Plan(stats: [], style: .labels, width: 0)
 
-    private let menuFont = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .regular)
     private lazy var glyphImage: NSImage? = {
         let image = NSImage(named: "MenuBarIcon")
         image?.isTemplate = true
@@ -31,7 +43,15 @@ final class StatusBarController {
     init(statsManager: StatsManager, settings: SettingsStore) {
         self.statsManager = statsManager
         self.settings = settings
+        self.renderer = MenuBarRenderer(barHeight: NSStatusBar.system.thickness)
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+
+        // Lets macOS remember our position in the bar across relaunches and
+        // across the visibility toggle used to recover from a display change.
+        statusItem.autosaveName = "PeakBarStatusItem"
+        // Guard against a stale `false` persisted under that autosave name (a
+        // crash mid-recovery would otherwise leave the app with no UI at all).
+        statusItem.isVisible = true
 
         if let button = statusItem.button {
             button.target = self
@@ -47,90 +67,92 @@ final class StatusBarController {
         statsManager.onUpdate = { [weak self] snapshot in
             self?.render(snapshot)
         }
-        // ...and immediately when any setting changes (visible stats, compact mode).
+        // ...and re-fit whenever a setting changes (visible stats, style).
         settings.objectWillChange
             .receive(on: RunLoop.main)
-            .sink { [weak self] _ in
-                guard let self else { return }
-                self.render(self.statsManager.snapshot)
-            }
+            .sink { [weak self] _ in self?.applyLayout() }
             .store(in: &cancellables)
+
+        // Plugging in a display, starting/stopping Sidecar, or a resolution
+        // change all change how much room the menu bar has.
+        NotificationCenter.default
+            .publisher(for: NSApplication.didChangeScreenParametersNotification)
+            .debounce(for: .seconds(0.5), scheduler: RunLoop.main) // let geometry settle
+            .sink { [weak self] _ in self?.handleScreenChange() }
+            .store(in: &cancellables)
+
+        applyLayout()
+    }
+
+    // MARK: - Layout
+
+    /// Re-fits the user's selection to the available menu bar width and pins the
+    /// item to that width.
+    private func applyLayout() {
+        let requested = settings.visibleStats
+        let newPlan: MenuBarLayout.Plan
+
+        if settings.fitToMenuBar {
+            newPlan = MenuBarLayout.fit(
+                stats: requested,
+                style: settings.menuBarStyle,
+                budget: MenuBarLayout.widthBudget(),
+                measure: { [renderer] stats, style in renderer.width(stats: stats, style: style) }
+            )
+        } else {
+            newPlan = MenuBarLayout.Plan(
+                stats: requested,
+                style: settings.menuBarStyle,
+                width: renderer.width(stats: requested, style: settings.menuBarStyle)
+            )
+        }
+
+        plan = newPlan
+        if layoutState.plan != newPlan { layoutState.plan = newPlan }
+
+        // Glyph-only mode has a constant width already, so variableLength costs
+        // nothing there and keeps the icon's natural padding.
+        statusItem.length = newPlan.stats.isEmpty
+            ? NSStatusItem.variableLength
+            : newPlan.width + Self.buttonPadding
 
         render(statsManager.snapshot)
     }
 
+    /// macOS drops status items it can't fit and doesn't put them back on its
+    /// own — hence "restart PeakBar to get the icon back". Re-fitting for the
+    /// new screen and then cycling visibility makes the system re-place the
+    /// item, which is the same thing a relaunch does, without the relaunch.
+    private func handleScreenChange() {
+        applyLayout()
+        statusItem.isVisible = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            self?.statusItem.isVisible = true
+        }
+    }
+
+    // MARK: - Rendering
+
     private func render(_ snapshot: StatsSnapshot) {
         guard let button = statusItem.button else { return }
 
-        if settings.visibleStats.isEmpty {
+        guard !plan.stats.isEmpty else {
             // Default: show the app glyph, no text.
             button.attributedTitle = NSAttributedString(string: "")
             button.image = glyphImage
             return
         }
 
-        button.image = nil
-        button.attributedTitle = settings.compactMode
-            ? compactTitle(snapshot)
-            : NSAttributedString(
-                string: MenuBarFormatter.format(visibleStats: settings.visibleStats, stats: snapshot),
-                attributes: [.font: menuFont]
-              )
-    }
-
-    /// Builds the compact menu bar string: each stat as an SF Symbol attachment
-    /// followed by its value. Falls back to a one-letter prefix if a symbol
-    /// can't be loaded.
-    private func compactTitle(_ snapshot: StatsSnapshot) -> NSAttributedString {
-        let result = NSMutableAttributedString()
-        let symbolConfig = NSImage.SymbolConfiguration(pointSize: 11, weight: .regular)
-
-        for (index, stat) in settings.visibleStats.enumerated() {
-            if index > 0 {
-                result.append(NSAttributedString(string: "  ", attributes: [.font: menuFont]))
-            }
-
-            if let icon = symbolImage(for: stat, config: symbolConfig) {
-                let displaySize = icon.size
-                let attachment = NSTextAttachment()
-                attachment.image = icon
-                attachment.bounds = CGRect(
-                    x: 0,
-                    y: (menuFont.capHeight - displaySize.height) / 2,
-                    width: displaySize.width,
-                    height: displaySize.height
-                )
-                result.append(NSAttributedString(attachment: attachment))
-                result.append(NSAttributedString(string: " ", attributes: [.font: menuFont]))
-            } else {
-                result.append(NSAttributedString(
-                    string: String(stat.menuPrefix.prefix(1)) + " ",
-                    attributes: [.font: menuFont]
-                ))
-            }
-
-            result.append(NSAttributedString(
-                string: MenuBarFormatter.compactValue(for: stat, stats: snapshot),
-                attributes: [.font: menuFont]
-            ))
+        switch plan.style {
+        case .labels, .icons:
+            button.image = nil
+            button.attributedTitle = renderer.attributedTitle(
+                stats: plan.stats, snapshot: snapshot, style: plan.style
+            )
+        case .stacked:
+            button.attributedTitle = NSAttributedString(string: "")
+            button.image = renderer.stackedImage(stats: plan.stats, snapshot: snapshot)
         }
-        return result
-    }
-
-    /// Returns the compact-mode icon for a stat: a custom SF Symbol from the
-    /// asset catalog (`customSymbolName`) if one exists, otherwise the stock
-    /// SF Symbol. Both are real symbol images, so the menu bar tints and dims
-    /// them identically (light/dark menu bars, inactive-screen dimming).
-    private func symbolImage(for stat: StatType, config: NSImage.SymbolConfiguration) -> NSImage? {
-        let base: NSImage?
-        if let name = stat.customSymbolName, let custom = NSImage(named: name) {
-            base = custom
-        } else {
-            base = NSImage(systemSymbolName: stat.symbolName, accessibilityDescription: stat.displayName)
-        }
-        let symbol = base?.withSymbolConfiguration(config) ?? base
-        symbol?.isTemplate = true
-        return symbol
     }
 
     @objc private func togglePopover(_ sender: Any?) {

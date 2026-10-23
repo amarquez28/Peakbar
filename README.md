@@ -10,6 +10,10 @@ CPU 10%  GPU 4%  RAM 7.2GB  CPU 48°C  GPU 51°C  FAN 2317rpm
 
 - **Live stats** every 5 seconds: CPU %, GPU %, RAM (GB), CPU/GPU temperature, fan RPM
 - **Configurable** — toggle any stat on/off from the dropdown grid
+- **Three menu bar styles** — word labels, icons, or **stacked** (icon above the
+  value), which fits all seven stats in less than half the width
+- **Fits your menu bar** — sizes itself to the space available so macOS doesn't
+  hide menu bar icons, yours or another app's
 - **Tiny & native** — Swift + SwiftUI/AppKit, no background daemons, ~160 KB
 - **Launch at Login** toggle
 - Runs on **macOS 13 (Ventura)+**, Apple Silicon and Intel

@@ -19,7 +19,9 @@ final class SettingsStore: ObservableObject {
     private let defaults = UserDefaults.standard
     private let visibleStatsKey = "visibleStats"
     private let launchAtLoginKey = "launchAtLogin"
-    private let compactModeKey = "compactMode"
+    private let compactModeKey = "compactMode" // pre-1.1.1, migrated to menuBarStyle
+    private let menuBarStyleKey = "menuBarStyle"
+    private let fitToMenuBarKey = "fitToMenuBar"
 
     @Published var visibleStats: [StatType] {
         didSet { defaults.set(visibleStats.map(\.rawValue), forKey: visibleStatsKey) }
@@ -32,10 +34,18 @@ final class SettingsStore: ObservableObject {
         }
     }
 
-    /// When on, the menu bar uses compact SF Symbol icons + values instead of
-    /// word labels, to save horizontal space (e.g. on notched displays).
-    @Published var compactMode: Bool {
-        didSet { defaults.set(compactMode, forKey: compactModeKey) }
+    /// How the menu bar draws each stat — see MenuBarStyle. Successively
+    /// narrower: word labels, SF Symbols, then symbol stacked over value.
+    @Published var menuBarStyle: MenuBarStyle {
+        didSet { defaults.set(menuBarStyle.rawValue, forKey: menuBarStyleKey) }
+    }
+
+    /// When on (the default), PeakBar sizes itself to the space the menu bar can
+    /// actually spare and drops trailing stats rather than overflowing. Turning
+    /// it off shows every selected stat, at the risk of macOS hiding menu bar
+    /// icons — PeakBar's or another app's — when they no longer all fit.
+    @Published var fitToMenuBar: Bool {
+        didSet { defaults.set(fitToMenuBar, forKey: fitToMenuBarKey) }
     }
 
     private init() {
@@ -46,7 +56,16 @@ final class SettingsStore: ObservableObject {
             visibleStats = [.cpu, .gpu] // defaults
         }
         launchAtLogin = defaults.bool(forKey: launchAtLoginKey)
-        compactMode = defaults.bool(forKey: compactModeKey)
+
+        if let raw = defaults.string(forKey: menuBarStyleKey), let style = MenuBarStyle(rawValue: raw) {
+            menuBarStyle = style
+        } else {
+            // Migrate the pre-1.1.1 `compactMode` boolean.
+            menuBarStyle = defaults.bool(forKey: compactModeKey) ? .icons : .labels
+        }
+
+        // Defaults to on, so `bool(forKey:)`'s false-for-missing isn't usable.
+        fitToMenuBar = defaults.object(forKey: fitToMenuBarKey) as? Bool ?? true
     }
 
     func isVisible(_ stat: StatType) -> Bool {
