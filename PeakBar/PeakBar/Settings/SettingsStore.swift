@@ -34,8 +34,8 @@ final class SettingsStore: ObservableObject {
         }
     }
 
-    /// How the menu bar draws each stat — see MenuBarStyle. Successively
-    /// narrower: word labels, SF Symbols, then symbol stacked over value.
+    /// How the menu bar draws each stat — see MenuBarStyle: word labels, or
+    /// the narrower SF Symbols.
     @Published var menuBarStyle: MenuBarStyle {
         didSet { defaults.set(menuBarStyle.rawValue, forKey: menuBarStyleKey) }
     }
@@ -59,6 +59,8 @@ final class SettingsStore: ObservableObject {
 
         if let raw = defaults.string(forKey: menuBarStyleKey), let style = MenuBarStyle(rawValue: raw) {
             menuBarStyle = style
+        } else if defaults.string(forKey: menuBarStyleKey) == "stacked" {
+            menuBarStyle = .icons // stacked was removed after 1.1.1; icons is the closest match
         } else {
             // Migrate the pre-1.1.1 `compactMode` boolean.
             menuBarStyle = defaults.bool(forKey: compactModeKey) ? .icons : .labels

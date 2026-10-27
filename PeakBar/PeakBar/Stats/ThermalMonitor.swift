@@ -9,6 +9,9 @@
 //  chip. Each sample averages the valid readings. If no sensor responds in a
 //  plausible range the temperature is reported as nil ("--°C").
 //
+//  Battery cell sensors are "TB<n>T" (TB0T–TB2T on an M3 Pro, ~29 °C idle).
+//  Desktop Macs have none, so the battery temperature is nil there.
+//
 
 import Foundation
 
@@ -16,11 +19,16 @@ final class ThermalMonitor {
     // Discovered once, lazily, on first sample. Empty if the SMC is unavailable.
     private lazy var cpuKeys: [String] = SMC.shared.keys(matchingPrefix: "Tp")
     private lazy var gpuKeys: [String] = SMC.shared.keys(matchingPrefix: "Tg")
+    private lazy var batteryKeys: [String] = SMC.shared.keys(matchingPrefix: "TB").filter { $0.hasSuffix("T") }
 
-    /// Returns CPU and GPU temperatures in degrees Celsius, or nil where no
-    /// sensor responded with a plausible value.
-    func sample() -> (cpu: Double?, gpu: Double?) {
-        (averageTemperature(keys: cpuKeys), averageTemperature(keys: gpuKeys))
+    /// Returns CPU, GPU and battery temperatures in degrees Celsius, or nil
+    /// where no sensor responded with a plausible value.
+    func sample() -> (cpu: Double?, gpu: Double?, battery: Double?) {
+        (
+            averageTemperature(keys: cpuKeys),
+            averageTemperature(keys: gpuKeys),
+            averageTemperature(keys: batteryKeys)
+        )
     }
 
     private func averageTemperature(keys: [String]) -> Double? {

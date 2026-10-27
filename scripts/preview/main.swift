@@ -15,8 +15,11 @@ snap.cpuTemp = 52
 snap.gpuTemp = 38
 snap.fanSpeed = 0
 snap.powerWatts = 32.7
+snap.batteryWatts = -12.4
+snap.batteryMinutes = 134
+snap.batteryTemp = 29
 
-let allStats: [StatType] = [.cpu, .gpu, .ram, .cpuTemp, .gpuTemp, .fan, .power]
+let allStats = StatType.allCases
 
 struct Row {
     let label: String
@@ -27,10 +30,8 @@ struct Row {
 let rows: [Row] = [
     Row(label: "labels  2", stats: [.cpu, .gpu], style: .labels),
     Row(label: "icons   2", stats: [.cpu, .gpu], style: .icons),
-    Row(label: "stacked 2", stats: [.cpu, .gpu], style: .stacked),
-    Row(label: "labels  7", stats: allStats, style: .labels),
-    Row(label: "icons   7", stats: allStats, style: .icons),
-    Row(label: "stacked 7", stats: allStats, style: .stacked),
+    Row(label: "labels 10", stats: allStats, style: .labels),
+    Row(label: "icons  10", stats: allStats, style: .icons),
 ]
 
 let labelFont = NSFont.monospacedSystemFont(ofSize: 9, weight: .regular)
@@ -69,24 +70,13 @@ for row in rows {
     NSColor(calibratedRed: 0.2, green: 0.5, blue: 1, alpha: 0.15).setFill()
     NSRect(x: labelWidth + 6, y: y, width: width + 12, height: barHeight).fill()
 
-    switch row.style {
-    case .labels, .icons:
-        let title = renderer.attributedTitle(stats: row.stats, snapshot: snap, style: row.style)
-        let mutable = NSMutableAttributedString(attributedString: title)
-        mutable.addAttribute(
-            .foregroundColor, value: NSColor.black,
-            range: NSRange(location: 0, length: mutable.length)
-        )
-        mutable.draw(at: NSPoint(x: labelWidth + 12, y: y + (barHeight - title.size().height) / 2))
-    case .stacked:
-        let stacked = renderer.stackedImage(stats: row.stats, snapshot: snap)
-        stacked.draw(in: NSRect(
-            x: labelWidth + 12,
-            y: y + (barHeight - stacked.size.height) / 2,
-            width: stacked.size.width,
-            height: stacked.size.height
-        ))
-    }
+    let title = renderer.attributedTitle(stats: row.stats, snapshot: snap, style: row.style)
+    let mutable = NSMutableAttributedString(attributedString: title)
+    mutable.addAttribute(
+        .foregroundColor, value: NSColor.black,
+        range: NSRange(location: 0, length: mutable.length)
+    )
+    mutable.draw(at: NSPoint(x: labelWidth + 12, y: y + (barHeight - title.size().height) / 2))
 
     print("\(row.label): \(Int(width))pt")
     y -= barHeight + rowSpacing

@@ -16,6 +16,9 @@ enum StatType: String, CaseIterable, Identifiable, Codable {
     case gpuTemp
     case fan
     case power
+    case battery
+    case batteryTime
+    case batteryTemp
 
     var id: String { rawValue }
 
@@ -29,6 +32,9 @@ enum StatType: String, CaseIterable, Identifiable, Codable {
         case .gpuTemp: return "GPU Temp"
         case .fan: return "Fan Speed"
         case .power: return "Power Draw"
+        case .battery: return "Battery Power"
+        case .batteryTime: return "Battery Time"
+        case .batteryTemp: return "Battery Temp"
         }
     }
 
@@ -40,6 +46,7 @@ enum StatType: String, CaseIterable, Identifiable, Codable {
         case .ram: return "RAM"
         case .fan: return "FAN"
         case .power: return "PWR"
+        case .battery, .batteryTime, .batteryTemp: return "BAT"
         }
     }
 
@@ -55,6 +62,9 @@ enum StatType: String, CaseIterable, Identifiable, Codable {
         case .gpuTemp: return "flame"
         case .fan: return "fanblades"
         case .power: return "bolt.fill"
+        case .battery: return "battery.75"
+        case .batteryTime: return "hourglass"
+        case .batteryTemp: return "heat.waves" // every thermometer variant looks like CPU Temp at 11pt
         }
     }
 

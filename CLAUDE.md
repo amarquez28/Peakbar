@@ -35,7 +35,7 @@ PeakBar/
 │   ├── MenuBar/
 │   │   ├── StatusBarController.swift # Owns NSStatusItem, drives the renderer
 │   │   ├── MenuBarFormatter.swift    # Formats stat values into menu bar strings
-│   │   ├── MenuBarRenderer.swift     # Draws the three styles; reports their widths
+│   │   ├── MenuBarRenderer.swift     # Draws the two styles; reports their widths
 │   │   └── MenuBarLayout.swift       # Width budget + fitting (see Menu Bar Width)
 │   ├── Dropdown/
 │   │   ├── DropdownView.swift        # SwiftUI root view for the popover
@@ -91,7 +91,7 @@ PeakBar/
   - Visual selected state: **checkbox in the top-right corner** of the block (checked = visible in menu bar)
 - Selected blocks get a distinct **accent-colored border** in addition to the checkmark
 - Below the grid:
-  - **Menu bar style** picker — Labels / Icons / Stacked (see [Menu Bar Styles](#menu-bar-styles))
+  - **Menu bar style** picker — Labels / Icons (see [Menu Bar Styles](#menu-bar-styles))
   - **Fit to menu bar space** toggle (default on — see [Menu Bar Width](#menu-bar-width))
   - **Launch at Login** toggle (uses `SMAppService`)
   - **Quit PeakBar** button
@@ -187,6 +187,27 @@ Menu bar format: `PWR 32.7W` (normal), bolt SF Symbol + `33W` (compact).
 
 > Verified on M3 Pro: `PSTR` ≈ 33 W light load; `PDTR` ≈ 67 W while charging.
 
+### Battery (IOKit `AppleSmartBattery`)
+`BatteryMonitor` reads the `AppleSmartBattery` registry entry (no SMC). Two menu
+bar stats plus a dropdown info line:
+- **Battery Power** — `Voltage` × `Amperage` (signed): `BAT +51.5W` charging,
+  `BAT −12.4W` discharging (U+2212 minus, matches `+`).
+- **Battery Time** — `AvgTimeToFull` while charging, `AvgTimeToEmpty` on battery
+  (`65535` = n/a). Plugged in but not charging → `nil` → `--`.
+- **Health / cycles** (dropdown only) — `BatteryData.NominalChargeCapacity` ÷
+  `DesignCapacity` (matches System Settings' "Maximum Capacity"), `CycleCount` of
+  `DesignCycleCount9C`.
+
+- **Battery Temp** — not in the registry on current macOS, so it comes from
+  the SMC instead: `ThermalMonitor` averages the `TB<n>T` keys (`flt`), the
+  same way it averages `Tp*`/`Tg*`. Drawn with `heat.waves` because every
+  thermometer variant is indistinguishable from CPU Temp's at menu bar size.
+
+No service / no `TB*T` keys (desktop Macs) → everything `nil`.
+
+> Verified on M3 Pro: +51 W charging on a 68 W adapter, −14.5 W on battery,
+> 86 % health, 530/1000 cycles; `TB0T`–`TB2T` ≈ 29 °C idle.
+
 > ⚠️ **Fan control is intentionally NOT implemented.** Writing fan keys
 > (`F<n>Md` mode / `F<n>Tg` target) requires a root-privileged helper daemon,
 > expands the security/notarization surface, is restricted by Apple on Apple
@@ -196,27 +217,31 @@ Menu bar format: `PWR 32.7W` (normal), bolt SF Symbol + `33W` (compact).
 
 ## Menu Bar Styles
 
-`MenuBarStyle` (in `MenuBarRenderer.swift`) has three cases, from most readable
-to most compact. Widths below are for all seven stats, measured by
-`scripts/preview-menubar.sh`:
+`MenuBarStyle` (in `MenuBarRenderer.swift`) has two cases. Widths below are for
+all ten stats, measured by `scripts/preview-menubar.sh`:
 
-| Style | Looks like | 7 stats | Drawn as |
+| Style | Looks like | 10 stats | Drawn as |
 |---|---|---|---|
-| `.labels` | `CPU 10% GPU 4%` | 504pt | attributed title |
-| `.icons` | `[cpu] 10% [gpu] 4%` | 379pt | attributed title, symbols as `NSTextAttachment` |
-| `.stacked` | symbol above value, two rows | 228pt | template `NSImage` |
+| `.labels` | `CPU 10% GPU 4%` | 716pt | attributed title |
+| `.icons` | `[cpu]10% [gpu]4%` | 539pt | attributed title, symbols as `NSTextAttachment` |
 
-`.stacked` is the reason a status item can show all seven stats on a notched
-MacBook: it's less than half the width of `.labels`. It can't be expressed as a
-string, so `MenuBarRenderer.stackedImage` draws it into an `NSImage` with
-`isTemplate = true` — template means the menu bar recolours it for light/dark
-just like a real SF Symbol, so don't bake colours into it.
+Values are drawn at their natural width, one space apart in both styles
+(`FAN Off PWR 32.7W`); in `.icons` the symbol-to-value gap is a thin space
+(U+2009). Stats to the right shift a few points when a number gains a digit —
+an accepted trade-off. Earlier versions padded every value to a fixed field
+with figure spaces, which stopped the shifting but left wide, uneven gaps
+(`FAN Off` reserved room for `9999rpm`).
 
-Two rows have to share ~24pt of menu bar, so the symbol and value are both drawn
-at 9pt (the value semibold to stay legible). Each column's width is fixed by the
-*widest* value that stat can ever show and the value is centred in it, which is
-how `.stacked` gets the constant-width guarantee that figure-space padding gives
-the one-line styles.
+The style picker is `.segmented`, which on macOS writes its binding during
+SwiftUI's view update (Apple-confirmed bridging bug,
+https://developer.apple.com/forums/thread/823629) and logs "Publishing changes
+from within view updates" on every switch. `DropdownView.deferredStyleBinding`
+applies the write on the next main-queue pass instead.
+
+> A third `.stacked` style (symbol above value, drawn as a template `NSImage`)
+> existed until 1.1.1. It was removed: at the ~9pt the menu bar's height allows
+> for two rows, the glyphs clipped and looked wrong. A saved `"stacked"`
+> preference migrates to `.icons`.
 
 Run `scripts/preview-menubar.sh` after touching the renderer — it compiles
 `MenuBarRenderer` + `MenuBarFormatter` standalone (no app, no asset catalog) and
@@ -235,26 +260,27 @@ owning app re-adding it (hence "restart PeakBar to get the icon back").
 
 Two properties keep PeakBar out of that failure mode:
 
-1. **The item never changes width while running.** `StatusBarController` asks
-   `MenuBarRenderer.width` for the widest content the current selection can ever
-   produce and pins `statusItem.length` to it, recomputing only when the
-   selection, the style, or the attached displays change — never on a stats
-   refresh. The content itself is constant-width too: `MenuBarFormatter`
-   left-pads numeric fields with figure spaces (U+2007, digit-width) so `CPU 7%`
-   and `CPU 100%` render identically, and `.stacked` centres values in
-   fixed-width columns. `StatsTests` enforces both
-   (`testFormattedWidthIsStableAcrossMagnitudes`,
-   `testStackedImageWidthIsStableAcrossMagnitudes`) — a format change that breaks
-   it will fail the tests.
+1. **The item only ever grows while running.** `StatusBarController` sizes
+   `statusItem.length` snugly around the current readings (+ 5pt
+   `buttonPadding`, the ~4.5pt `NSStatusBarButtonCell` needs), grows it when a
+   reading needs more room, and never shrinks it until the selection, style or
+   attached displays change. That's a handful of resizes per session — mostly
+   in the first minute as readings settle — rather than one per refresh.
+   Sizing for the worst case up front was tried and left visible empty space
+   at both edges. Growth is capped at `MenuBarRenderer.width`, the worst case
+   computed from `MenuBarFormatter.widestSnapshot` (100 %, 9999 rpm, −999 W, …),
+   which is also what the budget fitting below uses — so growing can never take
+   the item past the budget. `testRenderedWidthNeverExceedsPinnedWidth`
+   enforces that no reading exceeds that worst case; update `widestSnapshot`
+   along with any format change.
 2. **The item stays inside a width budget.** `MenuBarLayout.widthBudget()` takes
    45 % of the menu-extra region of the *narrowest* attached screen — on notched
    Macs that's `NSScreen.auxiliaryTopRightArea` (the strip right of the notch);
    otherwise ~66 % of the screen width, leaving room for the app's own menus.
    Using the narrowest screen means the width also doesn't have to change as the
    menu bar moves between displays. `MenuBarLayout.fit` degrades in the order that
-   costs the user least: step down the style ladder first (labels → icons →
-   stacked, all of which still show every stat), and only then drop stats from
-   the right. The dropdown explains what it did; the **Fit to menu bar space**
+   costs the user least: switch labels → icons first (which still shows every
+   stat), and only then drop stats from the right. The dropdown explains what it did; the **Fit to menu bar space**
    toggle (default on) disables the whole thing.
 
 On a display change (`didChangeScreenParametersNotification` — plugging in a
@@ -265,8 +291,9 @@ across relaunches. Because `isVisible` is persisted under the autosave name, ini
 force-sets it to `true` so a crash mid-cycle can't leave the app with no UI.
 
 > Measured on a 14" M3 Pro (1800pt scaled, notched): extras region 790pt →
-> 355pt budget. Default two stats = 128pt. All seven stats = 511pt normal,
-> ~363pt compact.
+> 355pt budget. Default two stats = 128pt labels / 107pt icons. All ten stats =
+> 716pt labels / 539pt icons, so on this Mac the fitter drops trailing stats
+> once roughly six are enabled.
 
 ---
 
@@ -393,7 +420,7 @@ If an SMC Swift library is needed, copy only the relevant files from the
    versions. Add a version check guard and test on Ventura, Sonoma, and Sequoia.
 4. **Menu bar space** — macOS never truncates the menu bar; when items don't fit it
    silently *removes whole status items*, ours or a neighbour's, and does not put
-   them back. Handled by fixed-width rendering + a width budget — see
+   them back. Handled by a grow-only item width + a width budget — see
    [Menu Bar Width](#menu-bar-width) below. Do not go back to a status item whose
    width changes on every refresh.
 5. **`SMAppService` for login items** — Available macOS 13+. No fallback needed

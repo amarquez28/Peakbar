@@ -17,4 +17,11 @@ struct StatsSnapshot {
     var gpuTemp: Double? = nil    // degrees Celsius
     var fanSpeed: Double? = nil   // RPM (averaged across fans)
     var powerWatts: Double? = nil // total system power draw (W)
+    var batteryWatts: Double? = nil      // + charging, − discharging (W)
+    var batteryMinutes: Int? = nil       // to full while charging, else to empty
+    var batteryCharging: Bool = false
+    var batteryTemp: Double? = nil       // degrees Celsius (SMC TB*T)
+    var batteryHealth: Double? = nil     // full-charge ÷ design capacity, 0–1
+    var batteryCycles: Int? = nil
+    var batteryDesignCycles: Int? = nil
 }

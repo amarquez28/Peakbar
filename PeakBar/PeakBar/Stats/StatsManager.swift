@@ -22,6 +22,7 @@ final class StatsManager: ObservableObject {
     private let thermal = ThermalMonitor()
     private let fan = FanMonitor()
     private let power = PowerMonitor()
+    private let battery = BatteryMonitor()
 
     private let interval: TimeInterval = 5
     private var timerCancellable: AnyCancellable?
@@ -47,8 +48,17 @@ final class StatsManager: ObservableObject {
         let temps = thermal.sample()
         snap.cpuTemp = temps.cpu
         snap.gpuTemp = temps.gpu
+        snap.batteryTemp = temps.battery
         snap.fanSpeed = fan.sample()
         snap.powerWatts = power.sample()
+        if let reading = battery.sample() {
+            snap.batteryWatts = reading.watts
+            snap.batteryMinutes = reading.minutesRemaining
+            snap.batteryCharging = reading.isCharging
+            snap.batteryHealth = reading.health
+            snap.batteryCycles = reading.cycleCount
+            snap.batteryDesignCycles = reading.designCycleCount
+        }
 
         snapshot = snap
         onUpdate?(snap)
@@ -67,6 +77,27 @@ final class StatsManager: ObservableObject {
             return rpm < 1 ? "Off" : "\(Int(rpm.rounded())) rpm"
         case .power:
             return snapshot.powerWatts.map { String(format: "%.1f W", $0) } ?? "-- W"
+        case .battery:
+            guard let watts = snapshot.batteryWatts else { return "-- W" }
+            return MenuBarFormatter.signed(watts, decimals: 1) + " W"
+        case .batteryTime:
+            guard let minutes = snapshot.batteryMinutes else { return "--" }
+            let time = MenuBarFormatter.duration(minutes)
+            return snapshot.batteryCharging ? "\(time) to full" : "\(time) left"
+        case .batteryTemp: return snapshot.batteryTemp.map { "\(Int($0.rounded()))°C" } ?? "--°C"
         }
+    }
+
+    /// "Battery health 86% · 530 cycles", or nil on a Mac without a battery.
+    var batterySummary: String? {
+        var parts: [String] = []
+        if let health = snapshot.batteryHealth {
+            parts.append("Battery health \(Int((health * 100).rounded()))%")
+        }
+        if let cycles = snapshot.batteryCycles {
+            let rated = snapshot.batteryDesignCycles.map { " of \($0)" } ?? ""
+            parts.append("\(cycles)\(rated) cycles")
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 }

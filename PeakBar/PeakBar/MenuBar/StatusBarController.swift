@@ -5,14 +5,18 @@
 //  Owns the NSStatusItem and the dropdown NSPopover, and drives MenuBarRenderer:
 //    - no stats selected → the Summit template glyph
 //    - .labels / .icons  → an attributed title on the button
-//    - .stacked          → a template image drawn by the renderer
 //
-//  The item's width is pinned (`statusItem.length`) to the widest content the
-//  current selection can ever produce, and only recalculated when the selection,
-//  the style, or the attached displays change — never on a stats refresh. A
-//  status item that resizes every few seconds makes macOS re-lay out the whole
-//  menu bar, which is what causes icons (ours, or a neighbour like Hidden Bar's
-//  arrow) to vanish on narrow displays. See MenuBarLayout.
+//  The item's width only ever grows while running. A status item that resizes
+//  every few seconds makes macOS re-lay out the whole menu bar, which is what
+//  causes icons (ours, or a neighbour like Hidden Bar's arrow) to vanish on
+//  narrow displays — see MenuBarLayout. But sizing for the worst case up front
+//  (CPU 100%, 100°C, 9999rpm) leaves visible empty space at both edges.
+//
+//  So: the item starts snug around the current readings, grows (once) when a
+//  reading needs more room, and never shrinks back until the selection, style,
+//  or displays change. That's a handful of resizes per session, mostly in the
+//  first minute. Fitting to the menu bar budget still uses the worst-case
+//  width, so growing can never push the item past the budget.
 //
 
 import AppKit
@@ -21,8 +25,10 @@ import SwiftUI
 
 final class StatusBarController {
     /// Slack added to the measured content width so the fixed-length item
-    /// doesn't clip itself — NSStatusBarButton insets its content slightly.
-    private static let buttonPadding: CGFloat = 12
+    /// doesn't clip itself. NSStatusBarButtonCell needs ~4.5pt beyond the
+    /// title's own width (measured: `cellSize` minus the attributed title's
+    /// width); anything more just shows up as empty space at both edges.
+    private static let buttonPadding: CGFloat = 5
 
     private let statusItem: NSStatusItem
     private let popover = NSPopover()
@@ -32,6 +38,9 @@ final class StatusBarController {
     private let layoutState = MenuBarLayoutState.shared
     private var cancellables = Set<AnyCancellable>()
     private var plan = MenuBarLayout.Plan(stats: [], style: .labels, width: 0)
+    /// Widest content shown since the last re-layout; the item's length tracks
+    /// it and only ever increases. Capped by `plan.width` (the worst case).
+    private var contentWidth: CGFloat = 0
 
     private lazy var glyphImage: NSImage? = {
         let image = NSImage(named: "MenuBarIcon")
@@ -86,8 +95,8 @@ final class StatusBarController {
 
     // MARK: - Layout
 
-    /// Re-fits the user's selection to the available menu bar width and pins the
-    /// item to that width.
+    /// Re-fits the user's selection to the available menu bar width and re-sizes
+    /// the item snugly around the current readings.
     private func applyLayout() {
         let requested = settings.visibleStats
         let newPlan: MenuBarLayout.Plan
@@ -110,13 +119,25 @@ final class StatusBarController {
         plan = newPlan
         if layoutState.plan != newPlan { layoutState.plan = newPlan }
 
-        // Glyph-only mode has a constant width already, so variableLength costs
-        // nothing there and keeps the icon's natural padding.
-        statusItem.length = newPlan.stats.isEmpty
-            ? NSStatusItem.variableLength
-            : newPlan.width + Self.buttonPadding
-
+        contentWidth = 0 // the only place the item may shrink
         render(statsManager.snapshot)
+    }
+
+    /// Grows the item to fit `width` of content if it doesn't already.
+    private func growToFit(_ width: CGFloat) {
+        // Whole points, so sub-point differences between readings don't count
+        // as growth; never past the worst case the budget was checked against.
+        let needed = min(width.rounded(.up), plan.width.rounded(.up))
+        guard needed > contentWidth else { return }
+        contentWidth = needed
+        setLength(needed + Self.buttonPadding)
+    }
+
+    /// Only touches the length when it actually changes: every assignment
+    /// rebuilds the item's menu bar scene (the "status-items … Variant" console
+    /// lines).
+    private func setLength(_ length: CGFloat) {
+        if statusItem.length != length { statusItem.length = length }
     }
 
     /// macOS drops status items it can't fit and doesn't put them back on its
@@ -137,22 +158,21 @@ final class StatusBarController {
         guard let button = statusItem.button else { return }
 
         guard !plan.stats.isEmpty else {
-            // Default: show the app glyph, no text.
+            // Default: show the app glyph, no text. Glyph-only mode has a
+            // constant width already, so variableLength keeps the icon's
+            // natural padding.
+            setLength(NSStatusItem.variableLength)
             button.attributedTitle = NSAttributedString(string: "")
             button.image = glyphImage
             return
         }
 
-        switch plan.style {
-        case .labels, .icons:
-            button.image = nil
-            button.attributedTitle = renderer.attributedTitle(
-                stats: plan.stats, snapshot: snapshot, style: plan.style
-            )
-        case .stacked:
-            button.attributedTitle = NSAttributedString(string: "")
-            button.image = renderer.stackedImage(stats: plan.stats, snapshot: snapshot)
-        }
+        let title = renderer.attributedTitle(stats: plan.stats, snapshot: snapshot, style: plan.style)
+        // Resize before setting the title, so a wider reading is never drawn
+        // clipped into the old length.
+        growToFit(title.size().width)
+        button.image = nil
+        button.attributedTitle = title
     }
 
     @objc private func togglePopover(_ sender: Any?) {

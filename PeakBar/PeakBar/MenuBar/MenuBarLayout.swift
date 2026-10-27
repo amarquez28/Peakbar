@@ -67,8 +67,8 @@ enum MenuBarLayout {
     }
 
     /// Fits `stats` into `budget`, degrading in the order that costs the user
-    /// the least: step down through narrower styles first (labels → icons →
-    /// stacked, which all still show every stat), and only then drop stats from
+    /// the least: step down to a narrower style first (labels → icons, which
+    /// still shows every stat), and only then drop stats from
     /// the right — the canonical order puts CPU/GPU first, so the ones added
     /// last go first. `measure` returns the rendered width of a candidate.
     static func fit(

@@ -21,9 +21,15 @@ struct DropdownView: View {
 
             StatToggleGrid(statsManager: statsManager, settings: settings)
 
+            if let battery = statsManager.batterySummary {
+                Label(battery, systemImage: "battery.100")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
             Divider()
 
-            Picker("Menu bar style", selection: $settings.menuBarStyle) {
+            Picker("Menu bar style", selection: deferredStyleBinding) {
                 ForEach(MenuBarStyle.allCases) { style in
                     Text(style.displayName).tag(style)
                 }
@@ -57,6 +63,20 @@ struct DropdownView: View {
         }
         .padding(16)
         .frame(width: 320)
+    }
+
+    /// The `.segmented` picker on macOS writes its selection back while SwiftUI
+    /// is still updating the view (a known bridging bug with NSSegmentedControl
+    /// — https://developer.apple.com/forums/thread/823629), which logs
+    /// "Publishing changes from within view updates is not allowed" on every
+    /// switch. Applying the write on the next main-queue pass sidesteps it.
+    private var deferredStyleBinding: Binding<MenuBarStyle> {
+        Binding(
+            get: { settings.menuBarStyle },
+            set: { style in
+                DispatchQueue.main.async { settings.menuBarStyle = style }
+            }
+        )
     }
 
     /// Explains the gap when the menu bar is showing less than was ticked above.
